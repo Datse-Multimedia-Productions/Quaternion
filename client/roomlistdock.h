@@ -36,13 +36,12 @@ class RoomListDock : public QDockWidget
         RoomListDock(QWidget* parent = nullptr);
         virtual ~RoomListDock();
 
-        void setConnection( QMatrixClient::Connection* connection );
+        void setConnection(QMatrixClient::Connection* newConnection );
 
     signals:
         void roomSelected(QMatrixClient::Room* room);
 
     private slots:
-        void rowSelected(const QModelIndex& index);
         void showContextMenu(const QPoint& pos);
         void menuJoinSelected();
         void menuLeaveSelected();

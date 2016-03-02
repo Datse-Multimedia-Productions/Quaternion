@@ -49,7 +49,6 @@ MainWindow::MainWindow()
     connect( roomListDock, &RoomListDock::roomSelected, userListDock, &UserListDock::setRoom );
     systemTray = new SystemTray(this);
     systemTray->show();
-    show();
     QTimer::singleShot(0, this, SLOT(initialize()));
 }
 

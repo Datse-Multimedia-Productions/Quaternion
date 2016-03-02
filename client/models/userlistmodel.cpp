@@ -29,10 +29,9 @@
 
 UserListModel::UserListModel(QObject* parent)
     : QAbstractListModel(parent)
-{
-    m_connection = nullptr;
-    m_currentRoom = nullptr;
-}
+    , m_connection(nullptr)
+    , m_currentRoom(nullptr)
+{ }
 
 UserListModel::~UserListModel()
 {

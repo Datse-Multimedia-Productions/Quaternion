@@ -19,7 +19,6 @@
 
 #include "roomlistdock.h"
 
-#include <QtCore/QDebug>
 #include <QtWidgets/QMenu>
 
 #include "models/roomlistmodel.h"
@@ -27,14 +26,18 @@
 
 RoomListDock::RoomListDock(QWidget* parent)
     : QDockWidget("Rooms", parent)
+    , connection(nullptr)
 {
-    connection = nullptr;
     //setWidget(new QWidget());
     model = new RoomListModel(this);
     view = new QListView();
     view->setModel(model);
-    connect( view, &QListView::activated, this, &RoomListDock::rowSelected );
-    connect( view, &QListView::clicked, this, &RoomListDock::rowSelected);
+    connect( view, &QListView::activated, this,
+             [this](const QModelIndex & index) {
+                emit roomSelected( model->roomAt(index.row()) ); });
+    // FIXME: That's essentially shortcutting double-click to single-click.
+    // Isn't there a better way to do it in Qt?
+    connect( view, &QListView::clicked, view, &QListView::activated);
     setWidget(view);
 
     contextMenu = new QMenu(this);
@@ -50,18 +53,12 @@ RoomListDock::RoomListDock(QWidget* parent)
 }
 
 RoomListDock::~RoomListDock()
-{
-}
+{ }
 
-void RoomListDock::setConnection( QMatrixClient::Connection* connection )
+void RoomListDock::setConnection( QMatrixClient::Connection* newConnection )
 {
-    this->connection = connection;
-    model->setConnection(connection);
-}
-
-void RoomListDock::rowSelected(const QModelIndex& index)
-{
-    emit roomSelected( model->roomAt(index.row()) );
+    connection = newConnection;
+    model->setConnection(newConnection);
 }
 
 void RoomListDock::showContextMenu(const QPoint& pos)
