@@ -28,7 +28,9 @@ RoomListDock::RoomListDock(QWidget* parent)
     : QDockWidget("Rooms", parent)
     , connection(nullptr)
 {
-    //setWidget(new QWidget());
+    setFeatures(DockWidgetMovable | DockWidgetFloatable);
+    setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+
     model = new RoomListModel(this);
     view = new QListView();
     view->setModel(model);
