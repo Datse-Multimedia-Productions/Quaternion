@@ -27,9 +27,8 @@
 
 LoginDialog::LoginDialog(QWidget* parent)
     : QDialog(parent)
+    , m_connection(nullptr)
 {
-    m_connection = nullptr;
-    
     serverEdit = new QLineEdit("https://matrix.org");
     userEdit = new QLineEdit();
     passwordEdit = new QLineEdit();
@@ -51,12 +50,12 @@ LoginDialog::LoginDialog(QWidget* parent)
     
     setLayout(mainLayout);
 
-    settings = new QSettings(QString("Quaternion"));
-    settings->beginGroup("Login");
-    serverEdit->setText(settings->value("homeserver", "https://matrix.org").toString());
-    saveCheck->setChecked(settings->value("savecredentials", false).toBool());
-    settings->endGroup();
-
+    {
+        QSettings settings;        settings.beginGroup("Login");
+        serverEdit->setText(settings.value("homeserver", "https://matrix.org").toString());
+        saveCheck->setChecked(settings.value("savecredentials", false).toBool());
+        settings.endGroup();
+    }
     
     connect( loginButton, &QPushButton::clicked, this, &LoginDialog::login );
 }
@@ -68,7 +67,7 @@ QuaternionConnection* LoginDialog::connection() const
 
 void LoginDialog::login()
 {
-    qDebug() << "login";
+    qDebug() << "Connecting and logging in to the server";
     setDisabled(true);
     QUrl url = QUrl::fromUserInput(serverEdit->text());
     QString user = userEdit->text();
@@ -76,12 +75,17 @@ void LoginDialog::login()
 
     setConnection(new QuaternionConnection(url));
 
-    settings->beginGroup("Login");
-    settings->setValue("savecredentials", saveCheck->isChecked());
-    if(saveCheck->isChecked()){
-        settings->setValue("homeserver", serverEdit->text());
+    {
+        QSettings settings;
+        settings.beginGroup("Login");
+        settings.setValue("savecredentials", saveCheck->isChecked());
+        if(saveCheck->isChecked())
+        {
+            settings.setValue("homeserver", serverEdit->text());
+            settings.setValue("userid", userEdit->text());
+        }
+        settings.endGroup();
     }
-    settings->endGroup();
 
     connect( m_connection, &QMatrixClient::Connection::connected, this, &QDialog::accept );
     connect( m_connection, &QMatrixClient::Connection::loginError, this, &LoginDialog::error );
@@ -91,21 +95,19 @@ void LoginDialog::login()
 void LoginDialog::error(QString error)
 {
     sessionLabel->setText( error );
+    setConnection(nullptr);
     setDisabled(false);
 }
 
-void LoginDialog::setDisabled(bool state) {
+void LoginDialog::setDisabled(bool state)
+{
     QDialog::setDisabled(state);
-    serverEdit->setDisabled(state);
-    userEdit->setDisabled(state);
-    loginButton->setDisabled(state);
 }
 
-void LoginDialog::setConnection(QuaternionConnection* connection) {
-    emit connectionChanged(connection);
-
+void LoginDialog::setConnection(QuaternionConnection* connection)
+{
     if (m_connection != nullptr) {
-        delete m_connection;
+        m_connection->deleteLater();
     }
 
     m_connection = connection;

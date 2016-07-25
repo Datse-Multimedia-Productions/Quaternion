@@ -64,76 +64,123 @@ void MainWindow::enableDebug()
 
 void MainWindow::initialize()
 {
-    menuBar = new QMenuBar();
-    connectionMenu = new QMenu(tr("&Connection"));
-    menuBar->addMenu(connectionMenu);
-    roomMenu = new QMenu(tr("&Room"));
-    menuBar->addMenu(roomMenu);
+    auto menuBar = new QMenuBar();
+    { // Connection menu
+        auto connectionMenu = menuBar->addMenu(tr("&Connection"));
 
-    settings = new QSettings(QString("Quaternion"));
-    settings->beginGroup("Login");
+        loginAction = connectionMenu->addAction(tr("&Login..."));
+        connect( loginAction, &QAction::triggered, this, &MainWindow::showLoginWindow);
 
-    quitAction = new QAction(tr("&Quit"), this);
-    quitAction->setShortcut(QKeySequence(QKeySequence::Quit));
-    connect( quitAction, &QAction::triggered, qApp, &QApplication::quit );
-    logoutAction = new QAction(tr("&Logout"), this);
-    connect(logoutAction, &QAction::triggered, this, &MainWindow::logout);
-    connectionMenu->addAction(logoutAction);
-    connectionMenu->addAction(quitAction);
+        logoutAction = connectionMenu->addAction(tr("&Logout"));
+        connect( logoutAction, &QAction::triggered, this, &MainWindow::logout);
 
-    joinRoomAction = new QAction(tr("&Join Room..."), this);
-    connect( joinRoomAction, &QAction::triggered, this, &MainWindow::showJoinRoomDialog );
-    roomMenu->addAction(joinRoomAction);
+        connectionMenu->addSeparator();
+
+        auto quitAction = connectionMenu->addAction(tr("&Quit"));
+        quitAction->setShortcut(QKeySequence(QKeySequence::Quit));
+        connect( quitAction, &QAction::triggered, qApp, &QApplication::quit );
+    }
+    { // Room menu
+        auto roomMenu = menuBar->addMenu(tr("&Room"));
+
+        auto joinRoomAction = roomMenu->addAction(tr("&Join Room..."));
+        connect( joinRoomAction, &QAction::triggered, this, &MainWindow::showJoinRoomDialog );
+    }
 
     setMenuBar(menuBar);
 
-    if(settings->value("savecredentials", false).toBool()){
-
-        if (connection != nullptr) {
-            delete connection;
-        }
-
-        connection = new QuaternionConnection(QUrl::fromUserInput(settings->value("homeserver").toString()));
-
-        connection->connectWithToken(settings->value("userid").toString(), settings->value("token").toString());
-        chatRoomWidget->setConnection(connection);
-        userListDock->setConnection(connection);
-        roomListDock->setConnection(connection);
-        systemTray->setConnection(connection);
-        connect( connection, &QMatrixClient::Connection::connectionError, this, &MainWindow::connectionError );
-        connect( connection, &QMatrixClient::Connection::syncDone, this, &MainWindow::gotEvents );
-        connect( connection, &QMatrixClient::Connection::reconnected, this, &MainWindow::getNewEvents );
-        connection->sync();
-
-    }else{
-
-        LoginDialog dialog(this);
-        connect(&dialog, &LoginDialog::connectionChanged, [=](QuaternionConnection* connection){
-            chatRoomWidget->setConnection(connection);
-            userListDock->setConnection(connection);
-            roomListDock->setConnection(connection);
-            systemTray->setConnection(connection);
-            connect( connection, &QMatrixClient::Connection::connectionError, this, &MainWindow::connectionError );
-            connect( connection, &QMatrixClient::Connection::syncDone, this, &MainWindow::gotEvents );
-            connect( connection, &QMatrixClient::Connection::reconnected, this, &MainWindow::getNewEvents );
-        });
-
-        if( dialog.exec() )
+    {
+        QSettings settings("Quaternion");
+        settings.beginGroup("Login");
+        if (settings.value("savecredentials", false).toBool() &&
+                settings.contains("userid") && settings.contains("token"))
         {
-            connection = dialog.connection();
-            QString userid = connection->userId();
-            QString token = connection->token();
-            if(settings->value("savecredentials", false).toBool()){
-                settings->setValue("userid", userid);
-                settings->setValue("token", token);
-            }else{
-                logoutAction->setDisabled(true);
-            }
-            connection->sync();
+            QUrl url = QUrl::fromUserInput(settings.value("homeserver").toString());
+            setConnection(new QuaternionConnection(url));
+    
+            connection->connectWithToken(settings.value("userid").toString(),
+                                         settings.value("token").toString());
+            loginAction->setEnabled(false);
+        } else {
+            showLoginWindow();
         }
+        settings.endGroup();
     }
 
-    settings->endGroup();
+}
+
+void MainWindow::setConnection(QuaternionConnection* newConnection)
+{
+    using QMatrixClient::Connection;
+    if (connection)
+    {
+        connection->disconnect( this ); // Disconnects all signals, not the connection itself
+        connection->deleteLater();
+    }
+
+    connection = newConnection;
+    chatRoomWidget->setConnection(connection);
+    userListDock->setConnection(connection);
+    roomListDock->setConnection(connection);
+    systemTray->setConnection(connection);
+
+    if (connection)
+    {
+        connect( connection, &Connection::connectionError, this, &MainWindow::connectionError );
+        connect( connection, &Connection::syncDone, this, &MainWindow::gotEvents );
+        connect( connection, &Connection::reconnected, this, &MainWindow::getNewEvents );
+        connect( connection, &Connection::loginError, this, &MainWindow::loggedOut );
+        connect( connection, &Connection::loggedOut, this, &MainWindow::loggedOut );
+
+        connection->sync(); // Enter an eternal chain of syncs
+    }
+}
+
+void MainWindow::showLoginWindow()
+{
+    LoginDialog dialog(this);
+    if( dialog.exec() )
+    {
+        QSettings settings("Quaternion");
+        settings.beginGroup("Login");
+        if (settings.value("savecredentials", false).toBool())
+        {
+            settings.setValue("userid", connection->userId());
+            settings.setValue("token", connection->token());
+        } else {
+            settings.remove("userid");
+            settings.remove("token");
+        }
+        settings.endGroup();
+
+        logoutAction->setEnabled(true);
+        loginAction->setEnabled(false);
+        setConnection(dialog.connection());
+    } else {
+        logoutAction->setEnabled(false);
+    }
+}
+
+void MainWindow::logout()
+{
+    connection->logout();
+
+    QSettings settings;
+    settings.beginGroup("Login");
+    settings.remove("userid");
+    settings.remove("token");
+    settings.remove("savecredentials");
+    settings.endGroup();
+    settings.sync();
+}
+
+void MainWindow::loggedOut()
+{
+    loginAction->setEnabled(true);
+    logoutAction->setEnabled(false);
+    setConnection(nullptr);
+    // This posts an event to the event queue and lets the logout to complete
+    loginAction->trigger();
 }
 
 void MainWindow::getNewEvents()
@@ -148,16 +195,6 @@ void MainWindow::gotEvents()
     getNewEvents();
 }
 
-void MainWindow::logout(){
-    settings->beginGroup("Login");
-    settings->remove("userid");
-    settings->remove("token");
-    settings->remove("savecredentials");
-    settings->endGroup();
-    settings->sync();
-    QApplication::quit();
-}
-
 void MainWindow::connectionError(QString error)
 {
     qDebug() << error;
@@ -167,8 +204,7 @@ void MainWindow::connectionError(QString error)
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if (connection)
-        connection->disconnect( this ); // Disconnects all signals, not the connection itself
+    setConnection(nullptr);
 
     event->accept();
 }

@@ -42,9 +42,6 @@ class LoginDialog : public QDialog
         void setDisabled(bool state);
         void setConnection(QuaternionConnection* connection);
 
-    signals:
-        void connectionChanged(QuaternionConnection* connection);
-
     private slots:
         void login();
         void error(QString error);
@@ -56,7 +53,6 @@ class LoginDialog : public QDialog
         QPushButton* loginButton;
         QLabel* sessionLabel;
         QCheckBox* saveCheck;
-        QSettings* settings;
         
         QuaternionConnection* m_connection;
 };
