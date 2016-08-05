@@ -3,14 +3,12 @@ language: cpp
 compiler:
  - gcc
  - clang
-addons:
-  apt:
-    #sources:
-      #- sourceline 'ppa:beineri/opt-qt542-trusty'
-    packages:
-      - qt5-default
+before_install:
+ - sudo apt-get update -qq
+ - sudo apt-get install -y qt5-default
 install:
- - git submodule update --init --recursive
  - mkdir build && cd build
-script: cmake --build . --target all
+ - cmake ..
+script:
+ - cmake --build . --target all
 
