@@ -48,9 +48,12 @@ Rectangle {
 
             section {
                 property: "date"
+                labelPositioning: ViewSection.InlineLabels | ViewSection.NextLabelAtEnd
+
                 delegate: Rectangle {
                     width:parent.width
                     height: childrenRect.height
+                    color: "lightgrey"
                     Label { text: section.toLocaleString("dd.MM.yyyy") }
                 }
             }
